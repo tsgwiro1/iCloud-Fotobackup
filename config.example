@@ -1,0 +1,154 @@
+# Fotobackup – Konfiguration
+#
+# Diese Datei als "config" kopieren und anpassen:
+#     cp config.example config
+#
+# "config" wird nicht versioniert (siehe .gitignore) und enthält als einzige
+# Datei rechnerspezifische Werte. Sie wird von den Skripten auf beiden Seiten
+# gelesen – auf dem Mac von den Shell-Skripten, auf dem Zielrechner von den
+# Python-Skripten.
+#
+# Format: KEY=WERT, eine Zuweisung pro Zeile. Die Datei wird von Bash per
+# `. config` eingelesen, deshalb müssen Werte mit Leerzeichen in
+# Anführungszeichen stehen – sonst hält die Shell das zweite Wort für einen
+# Befehl.
+#
+# Auf dem Zielrechner liegt eine eigene Kopie, sie braucht nur die Abschnitte
+# "Ziel" und "Meldung".
+
+
+# ---------------------------------------------------------------------------
+# Ziel – der Rechner, auf dem die Fotos landen
+# ---------------------------------------------------------------------------
+
+# Adresse oder Hostname des Zielrechners
+SERVER=192.168.1.10
+
+# Name der SMB-Freigabe
+SHARE=Fotos
+
+# Benutzer für die SMB-Anmeldung
+SMB_USER=backup
+
+# Pfad des Bestands auf dem Zielrechner
+BESTAND=/srv/fotos
+
+# Wo der Mac die Freigabe einhängt. Bewusst nicht /Volumes: dort kämen sich
+# Skript und Finder in die Quere, wenn beide gleichzeitig verbunden sind.
+MOUNTPOINT=$HOME/mnt/fotos
+
+
+# ---------------------------------------------------------------------------
+# Export – nur auf dem Mac gebraucht
+# ---------------------------------------------------------------------------
+
+OSXPHOTOS=$HOME/.local/bin/osxphotos
+
+# Die Exportdatenbank gehört auf die lokale Platte, nicht auf die Freigabe.
+# Liegt sie auf einem Netzlaufwerk, weicht osxphotos auf eine RAM-Kopie aus
+# und schreibt sie erst am Ende zurück – ein nächtlicher Abbruch verwirft dann
+# den gesamten Fortschritt.
+EXPORTDB="$HOME/Library/Application Support/fotoexport/osxphotos_export.db"
+
+# Untergrenze für den freien Platz auf der Mac-Platte in GB. Der Export wird
+# gestoppt, wenn sie unterschritten wird.
+#
+# Bewusst tief ansetzen: Bei aktiver Speicheroptimierung gibt macOS den als
+# "löschbar" geführten Platz der Fotomediathek erst frei, wenn es wirklich eng
+# wird – gemessen bei rund 5 GB. Eine höhere Grenze bricht den Export ab,
+# bevor das System überhaupt aufräumen kann.
+MINDESTFREI_GB=8
+
+# Schlüsselbund-Eintrag, falls der Finder-Eintrag nicht gefunden wird
+KEYCHAIN_DIENST=fotobackup
+
+
+# ---------------------------------------------------------------------------
+# Meldung an Home Assistant über MQTT – optional
+# ---------------------------------------------------------------------------
+# Ohne MQTT_HOST wird nichts gemeldet, die Skripte laufen trotzdem.
+
+MQTT_HOST=192.168.1.20
+MQTT_PORT=1883
+MQTT_USER=
+MQTT_PASS=
+
+# Präfix für die Daten-Topics. Das Discovery-Topic muss dagegen unter
+# "homeassistant/" liegen, das ist in HA fest verdrahtet.
+MQTT_PRAEFIX=fotoexport
+
+# Kennung und Anzeigename des Geräts in Home Assistant.
+# GERAET_ID geht in die unique_id jeder Entität ein – nachträglich zu ändern
+# heisst, dass HA alle Entitäten neu anlegt.
+GERAET_ID=fotoexport_nas
+GERAET_NAME="Fotobackup NAS"
+
+
+# ---------------------------------------------------------------------------
+# Löschabgleich
+# ---------------------------------------------------------------------------
+
+# Gälten mehr als dieser Anteil des Bestands als verwaist, bricht der
+# Abgleich ab. Ein abgebrochener Export schreibt einen unvollständigen
+# Bericht – dann sähe der halbe Bestand wie Müll aus. Genau in dem Moment,
+# in dem etwas schiefgegangen ist, darf ein Aufräumwerkzeug nicht besonders
+# gründlich werden.
+GRENZE_ANTEIL=0.02
+
+# Ist der jüngste Exportbericht älter als so viele Tage, bricht der Abgleich
+# ebenfalls ab. Ein veralteter Bericht kennt neue Fotos nicht und hielte sie
+# für Waisen.
+GRENZE_ALTER_TAGE=14
+
+
+# ---------------------------------------------------------------------------
+# Zeitplan der Bestandsprüfung
+# ---------------------------------------------------------------------------
+# Muss zum cron-Eintrag passen. Diese Werte dienen nur dazu, den nächsten
+# Termin auszurechnen und zu melden – ausgelöst wird der Lauf von cron.
+#
+#     0 3 1 * *  /pfad/zu/pruefe_bestand.py
+
+PRUEFUNG_TAG=1
+PRUEFUNG_STUNDE=3
+
+
+# ---------------------------------------------------------------------------
+# Geplante Exportläufe (--geplant, für launchd)
+# ---------------------------------------------------------------------------
+# Mindestabstand zwischen zwei erfolgreichen Läufen in Stunden.
+#
+# Der LaunchAgent fragt alle 30 Minuten nach, weil ein Laptop meist im
+# Akkubetrieb aufgeklappt und erst später eingesteckt wird. Ein einziger
+# fester Termin träfe fast nie den richtigen Moment. Dieser Wert verhindert,
+# dass daraus mehrere Läufe pro Tag werden.
+#
+# 20 statt 24, damit der Zeitpunkt nicht von Tag zu Tag nach hinten wandert.
+MINDESTABSTAND_STUNDEN=20
+
+# Nur am Netzteil laufen? ja (Vorgabe) oder nein.
+#
+# Ein voller Lauf dauert gut eine Stunde und hält Platte, Netz und PhotoKit
+# beschäftigt. Auf einem Laptop ist das im Akkubetrieb selten erwünscht,
+# deshalb die Vorgabe "ja".
+#
+# Bei "nein" ist zweierlei zu bedenken. Erstens der Verbrauch: Rechne mit
+# einer knappen Stunde unter Last. Zweitens der Deckel – caffeinate -s, das
+# den Ruhezustand des ganzen Systems verhindert, wirkt laut Apple nur am
+# Netzteil. Im Akkubetrieb bleibt caffeinate -i, das lediglich den
+# Leerlauf-Ruhezustand abwehrt. Zugeklappt schläft der Mac trotzdem ein und
+# der Lauf bricht ab. Er wird beim nächsten Mal fortgesetzt, aber der Bericht
+# dieses Laufs bleibt unvollständig und taugt nicht für den Löschabgleich.
+NETZTEIL_NOETIG=ja
+
+
+# ---------------------------------------------------------------------------
+# Überwachung des Exports – auf dem Zielrechner
+# ---------------------------------------------------------------------------
+# Ab wie vielen Tagen ohne vollständigen Export gemeldet wird.
+#
+# Grosszügig angesetzt: Der Export hängt an einem Laptop, der auch mal wochen-
+# lang nicht zu Hause ist. Häufige Fehlalarme gewöhnt man sich schneller ab,
+# als ein echter Ausfall auftritt – und der Bestand veraltet ja nur langsam.
+EXPORT_WARNUNG_TAGE=30
+EXPORT_FEHLER_TAGE=90

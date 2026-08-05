@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Wöchentlicher Export per launchd.
+
+    Kopieren nach ~/Library/LaunchAgents/local.fotobackup.export.plist
+    und BENUTZER sowie den Pfad zum Skript anpassen.
+
+    Bewusst ein LaunchAgent (Benutzerkontext), kein LaunchDaemon: Der Export
+    braucht den Schlüsselbund des angemeldeten Benutzers und dessen
+    Fotos-Berechtigung. Ein Daemon läuft ohne beides und scheitert.
+
+    Siehe docs/betrieb.md.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.fotobackup.export</string>
+
+    <!-- Aufgerufen wird die App-Hülle, nicht das Skript direkt.
+
+         Grund: macOS vergibt den Zugriff auf Netzwerkvolumes pro Programm,
+         und einem nackten Skript lässt sich Festplattenvollzugriff gar nicht
+         erteilen – diese Berechtigung ist für App-Bundles gedacht. Ohne sie
+         scheitert der Export still an "Operation not permitted".
+
+         Die Hülle erzeugt ./baue_bundle.sh; sie ruft fotoexport.sh --geplant
+         auf. Die Alternative wäre, /bin/bash freizugeben – dann hätte aber
+         jedes Bash-Skript auf dem Rechner vollen Zugriff. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/BENUTZER/Applications/Fotobackup.app/Contents/MacOS/Fotobackup</string>
+    </array>
+
+    <!-- Alle 30 Minuten nachfragen, nicht einmal täglich.
+
+         Der Grund ist der Alltag eines Laptops: Er wird im Akkubetrieb
+         aufgeklappt und erst irgendwann später eingesteckt. Ein einziger
+         fester Termin träfe fast immer den Moment, in dem gerade kein
+         Netzteil dranhängt – und dann liefe der Export praktisch nie.
+
+         Das Skript entscheidet selbst, ob wirklich etwas zu tun ist: Es
+         läuft nur, wenn seit dem letzten erfolgreichen Lauf mindestens
+         MINDESTABSTAND_STUNDEN (Standard 20) vergangen sind. Die übrigen
+         Aufrufe enden nach Sekundenbruchteilen ohne Logeintrag.
+
+         Effektiv heisst das: Der Export startet, sobald der Mac am Strom
+         hängt und im Heimnetz ist – höchstens aber einmal pro Tag. -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <!-- Nicht beim Anmelden starten: Ein 20-Minuten-Lauf über SMB direkt nach
+         dem Hochfahren ist selten das, was man gerade will. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/BENUTZER/Library/Logs/fotoexport/launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/BENUTZER/Library/Logs/fotoexport/launchd.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- Der Export soll den Rechner nicht ausbremsen, wenn nebenher
+         gearbeitet wird. Das eigentliche Nadelöhr ist ohnehin Apple. -->
+    <key>Nice</key>
+    <integer>5</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

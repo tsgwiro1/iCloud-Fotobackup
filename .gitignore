@@ -1,0 +1,26 @@
+# Rechnerspezifische Werte und Zugangsdaten
+config
+secrets.conf
+
+# Arbeitsjournal dieser Installation. Enthaelt Netzadressen, Zahlen und
+# Irrtuemer aus dem konkreten Aufbau. Die entpersonalisierte Fassung fuer
+# andere ist docs/entscheidungen.md.
+backup_konzept.md
+
+# Protokolle und Berichte
+protokolle/
+*.log
+
+# Prüfsummenlisten – gehören zum Bestand, nicht ins Repository
+pruefsummen/
+*.liste
+*.liste.neu
+
+# Exportdatenbank
+*.db
+
+# Arbeitsdateien
+stichprobe/
+.DS_Store
+__pycache__/
+*.pyc
