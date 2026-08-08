@@ -1,6 +1,6 @@
 # iCloud-Fotobackup 📷
 
-![Version](https://img.shields.io/badge/version-v1.0.1-blue.svg)
+![Version](https://img.shields.io/badge/version-v1.1.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%2B%20Linux-lightgrey.svg)
 
@@ -109,6 +109,7 @@ Der Kurzweg für Ungeduldige:
 ./mac/fotoexport.sh --dry-run --album "Test"   # nichts wird geschrieben
 ./mac/fotoexport.sh --album "Test"             # ein Album, echt
 ./mac/fotoexport.sh                            # alles, über Nacht
+./mac/fotoexport.sh --status                   # wie weit ist er, darf der nächste
 ```
 
 Für den Alltag danach – wöchentlicher Lauf per `launchd`, Start und Stopp,
@@ -135,6 +136,25 @@ nicht und friert danach den Finder ein.
 Enthält einen **Platzwächter**: Die Mediathek wächst während des Laufs, weil
 Apple fehlende Originale erst lokal ablegt. Unterschreitet der freie Platz die
 Grenze, wird sauber abgebrochen.
+
+`--status` beantwortet ohne Nebenwirkungen die drei Fragen, die während und
+nach einem Lauf aufkommen: läuft gerade einer und wie weit ist er, wie ging der
+letzte aus, und **darf der nächste geplante überhaupt**. Der dritte Punkt ist
+der wichtigste – ein geplanter Lauf steigt still aus, wenn Mindestabstand,
+Netzteil oder Server nicht mitspielen, und den Grund sah man bisher erst
+hinterher im Protokoll.
+
+```
+LÄUFT   seit 12:46:02 Uhr, 34 min, PID 97188
+        bei Objekt 24931 von 48838 (51 %)
+        733 Objekte/min, noch etwa 32 min
+
+NÄCHSTER geplanter Lauf
+        Abstand   gesperrt bis 09.08. 12:01 (Mindestabstand 20 h)
+        Netzteil  FEHLT – der Lauf würde ausgelassen
+        Server    192.168.0.6 erreichbar
+        Platz     51 GB frei (Untergrenze 8 GB)
+```
 
 ### `mac/pruefe_dateien.py`
 
@@ -182,7 +202,7 @@ mit elf Entitäten an. Details und fertige Automationen:
 | | gemessen | skaliert mit |
 |---|---|---|
 | Erstlauf | 12 h 06 min | Objektzahl, ~1 h je 4000 Objekte |
-| Folgelauf ohne Änderungen | 19 min | Datei**zahl**, ~1 min je 5000 Dateien |
+| Folgelauf ohne Änderungen | 20 min – aber siehe unten | Datei**zahl**, ~1 min je 5000 Dateien |
 | Bestandsprüfung | 12 min 36 s auf **einem** Kern | Daten**menge**, ~4 min je 50 GB |
 | Löschabgleich | 5 s | Dateizahl, läuft lokal auf dem Server |
 | `b3sum` vs. `sha256sum` auf CM4 | 8× schneller, einthreadig noch 2× | — |
@@ -191,6 +211,19 @@ mit elf Entitäten an. Details und fertige Automationen:
 Der Erstlauf hängt an Apple, nicht an der Leitung: Die Objekte kommen einzeln
 über PhotoKit, und der Durchsatz bestimmt sich aus der Latenz je Datei. Eine
 schnellere Internetverbindung hilft kaum.
+
+> ⚠️ **`ProcessType` in der `.plist` entscheidet über den Faktor 3.5.**
+> Dieselbe Arbeit, dasselbe Ergebnis, nur anders gestartet:
+>
+> | | Objekte/min | Laufzeit |
+> |---|---|---|
+> | `ProcessType Background` | 751 | 64–73 min |
+> | `ProcessType Standard` | 2626 | **20 min** |
+>
+> `Background` klingt nach der richtigen Wahl für einen nächtlichen
+> Wartungslauf, lässt launchd aber die I/O aktiv drosseln – und dieser Lauf
+> besteht praktisch nur aus I/O. Die mitgelieferte Vorlage steht deshalb auf
+> `Standard`. Wer sie ändert, ändert die Laufzeit um das Dreieinhalbfache.
 
 Die letzte Zeile ist der lehrreichste Wert und in
 [docs/entscheidungen.md](docs/entscheidungen.md#eine-schätzung-die-um-das-fünffache-danebenlag)

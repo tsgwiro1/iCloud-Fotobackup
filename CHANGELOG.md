@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-08
+
 ### Added
+- `fotoexport.sh --status` – Auskunft ohne Nebenwirkungen. Zeigt, ob gerade ein
+  Lauf aktiv ist und bei welchem Objekt von wie vielen er steht, wie der letzte
+  vollständige Export ausging (verarbeitet, Laufzeit, Rückgabewert), und ob der
+  nächste geplante Lauf überhaupt darf – Mindestabstand, Netzteil, Server,
+  Platz.
+
+  Der letzte Block ist der eigentliche Anlass: Ein geplanter Lauf steigt still
+  aus, wenn eine dieser Bedingungen nicht stimmt, und den Grund sah man bisher
+  erst hinterher im Protokoll.
+
+  Schreibt nichts ins Protokoll, nimmt die Sperrdatei nicht und stört einen
+  laufenden Export nicht. Mit `-w` aktualisiert sich die Anzeige alle
+  60 Sekunden.
+
 - `NETZTEIL_NOETIG` in der Konfiguration (Vorgabe `ja`). Bei `nein` läuft auch
   ein geplanter Export im Akkubetrieb.
 
@@ -20,10 +36,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   damit unterscheidbar, ob ein verdächtiges Datum echt oder ein Importartefakt
   ist.
 
+### Removed
+- `mac/fotostatus.sh` – geht in `fotoexport.sh --status` auf. Zwei Werkzeuge
+  für dieselbe Frage waren einmal zu viel.
+
+  Übernommen wurden Dateizahl und Grösse am Ziel (weiterhin per SSH gezählt,
+  nicht über den SMB-Mount), die Grösse der Exportdatenbank und der
+  Wiederholmodus. Ersetzt wurde die Fortschrittsanzeige: `fotostatus.sh` mass
+  sie an der Zahl der Dateien am Ziel. Das funktioniert beim Erstlauf, ist im
+  Alltag aber blind – ein inkrementeller Lauf exportiert nichts, also bewegt
+  sich diese Zahl nicht. `--status` liest stattdessen den Objektzähler von
+  osxphotos aus dem Protokoll.
+
+### Changed
+- **`ProcessType` in der launchd-Vorlage von `Background` auf `Standard`.**
+  Das ist der Unterschied zwischen 20 und 66 Minuten.
+
+  `Background` klingt nach der richtigen Wahl für einen nächtlichen
+  Wartungslauf, weist launchd aber an, die I/O des Jobs aktiv zu drosseln.
+  Dieser Lauf besteht praktisch nur aus I/O – er fragt jede Dateisignatur
+  einzeln über SMB ab.
+
+  Gemessen an ~50'000 Dateien, gleiche Arbeit, gleiches Ergebnis:
+  `Background` 751 Objekte/min (64–73 min), `Standard` 2626 Objekte/min
+  (20 min). `Nice 5` bleibt; es wirkt auf die CPU, die hier nicht das
+  Nadelöhr ist.
+
 ### Fixed
 - `docs/betrieb.md` verwies auf einen Arbeitsordner neben dem Repository.
 
 ### Notes
+- **Ein Berechtigungsdialog beim geplanten Lauf heisst nicht, dass die
+  Berechtigung fehlt – er kann auch bedeuten, dass sie auf einen alten Pfad
+  zeigt.** Nach dem Umbenennen des Programms im Bundle (`applet` →
+  Bundle-Name) blieb der Eintrag für Festplattenvollzugriff auf
+  `Contents/MacOS/applet` stehen. Die Systemeinstellungen zeigten den Schalter
+  weiter als eingeschaltet, zur Laufzeit meldete tccd
+  `SystemPolicyAllFiles → Denied (Service Policy)`, und macOS wich auf die
+  granulare Abfrage „Daten anderer Apps" aus – bei jedem Lauf neu.
+
+  Weder `−` in den Systemeinstellungen noch `tccutil reset` halfen;
+  ohne `sudo` trifft `tccutil` ausserdem nur die Benutzerdatenbank, während
+  Festplattenvollzugriff in der Systemdatenbank steht. Was half: **Schalter
+  aus, kurz warten, wieder an.** Damit schreibt macOS die Zeile neu.
+
+  Merke: Die Liste in den Systemeinstellungen ist eine Anzeige, kein Zustand.
+  Was gilt, steht im Log:
+  `log show --last 1h --predicate 'process == "tccd"' | grep -i fotobackup`
 - Eine fehlende Berechtigung **Lokales Netzwerk** sieht im Protokoll aus wie
   Abwesenheit: Das Skript meldet „nicht erreichbar – vermutlich ausser Haus",
   weil es die stille Verweigerung nicht von einem toten Server unterscheiden
@@ -186,5 +245,6 @@ sind:
 - Samba braucht `force create mode`, nicht nur `create mask`: Eine Maske
   erlaubt Bits, sie erzwingt sie nicht.
 
+[1.1.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.1.0
 [1.0.1]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.0.1
 [1.0.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.0.0

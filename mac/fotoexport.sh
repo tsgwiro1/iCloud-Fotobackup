@@ -20,6 +20,12 @@
 #                                    Heimnetz und – sofern NETZTEIL_NOETIG=ja –
 #                                    nur am Netzteil. Sonst wird der Lauf still
 #                                    ausgelassen (Rückgabewert 0)
+#   ./fotoexport.sh --status         Auskunft: läuft gerade einer und wie weit
+#                                    ist er, wie ging der letzte aus, und darf
+#                                    der nächste geplante überhaupt. Ändert
+#                                    nichts und stört einen laufenden Export
+#                                    nicht
+#   ./fotoexport.sh --status -w      dasselbe, aktualisiert sich alle 60 s
 
 set -u
 set -o pipefail
@@ -70,12 +76,16 @@ LOG="$LOGVERZEICHNIS/export_$DATUM.log"
 ALBUM=""
 DRY_RUN=0
 GEPLANT=0
+STATUS=0
+WATCH=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --album)    ALBUM="$2"; shift 2 ;;
     --dry-run)  DRY_RUN=1; shift ;;
     --geplant)  GEPLANT=1; shift ;;
+    --status)   STATUS=1; shift ;;
+    -w|--watch) WATCH=1; shift ;;
     *) echo "Unbekannte Option: $1"; exit 2 ;;
   esac
 done
@@ -86,6 +96,153 @@ melde() { echo "$(date '+%H:%M:%S')  $*" | tee -a "$LOG"; }
 
 # Freier Platz auf der Systemplatte in GB
 frei_gb() { /bin/df -g / | awk 'NR==2 {print $4}'; }
+
+# ---------------------------------------------------------------------------
+# --status – Auskunft ohne Nebenwirkungen
+# ---------------------------------------------------------------------------
+# Schreibt bewusst nichts ins Protokoll und nimmt die Sperrdatei nicht. Steht
+# deshalb vor der Sperrlogik und vor dem trap: --status darf einen laufenden
+# Export unter keinen Umständen stören.
+#
+# Beantwortet die drei Fragen, die man während und nach einem Lauf stellt:
+# läuft gerade etwas, wie ist der letzte ausgegangen, und darf der nächste.
+status_zeigen() {
+  local jetzt lauf_pid start dauer letztes_log fortschritt n gesamt
+  local rest tempo rest_min log letzte_zeile
+  jetzt=$(date +%s)
+
+  echo "Fotoexport – Status vom $(date '+%d.%m.%Y, %H:%M:%S')"
+  echo
+
+  # --- Läuft gerade einer? ------------------------------------------------
+  lauf_pid=""
+  if [ -e "$LOCKDATEI" ]; then
+    lauf_pid="$(cat "$LOCKDATEI" 2>/dev/null || true)"
+    if [ -z "$lauf_pid" ] || ! kill -0 "$lauf_pid" 2>/dev/null; then
+      lauf_pid=""
+    fi
+  fi
+
+  if [ -n "$lauf_pid" ]; then
+    start=$(stat -f %m "$LOCKDATEI")
+    dauer=$(( jetzt - start ))
+    echo "LÄUFT   seit $(date -r "$start" '+%H:%M:%S') Uhr, $(( dauer / 60 )) min, PID $lauf_pid"
+
+    letztes_log="$(ls -t "$LOGVERZEICHNIS"/export_*.log 2>/dev/null | head -1 || true)"
+    fortschritt=""
+    [ -n "$letztes_log" ] && fortschritt="$(grep -oE '\([0-9]+/[0-9]+\)' "$letztes_log" 2>/dev/null | tail -1 | tr -d '()' || true)"
+
+    if [ -n "$fortschritt" ]; then
+      n="${fortschritt%%/*}"
+      gesamt="${fortschritt##*/}"
+      echo "        bei Objekt $n von $gesamt ($(( n * 100 / gesamt )) %)"
+      # Grobe Schätzung: Der Startaufwand von rund einer halben Minute steckt
+      # in der Rate mit drin, die Restzeit fällt dadurch eher zu hoch aus.
+      if [ "$dauer" -gt 60 ] && [ "$n" -gt 0 ]; then
+        tempo=$(( n / (dauer / 60) ))
+        rest=$(( gesamt - n ))
+        [ "$tempo" -gt 0 ] && rest_min=$(( rest / tempo )) || rest_min=0
+        echo "        $tempo Objekte/min, noch etwa $rest_min min"
+      fi
+    else
+      echo "        noch in der Vorbereitung (Mediathek wird gelesen)"
+    fi
+  else
+    echo "LÄUFT   nichts."
+  fi
+  echo
+
+  # --- Der letzte vollständige Export --------------------------------------
+  log=""
+  for kandidat in $(ls -t "$LOGVERZEICHNIS"/export_*.log 2>/dev/null || true); do
+    if grep -q "Export fertig" "$kandidat" 2>/dev/null; then log="$kandidat"; break; fi
+  done
+
+  if [ -z "$log" ]; then
+    echo "LETZTER kein abgeschlossener Export im Protokoll gefunden."
+  else
+    echo "LETZTER vollständiger Export am $(basename "$log" .log | sed 's/^export_//')"
+    letzte_zeile="$(grep 'Processed:' "$log" | tail -1 || true)"
+    [ -n "$letzte_zeile" ] && echo "        $letzte_zeile"
+    letzte_zeile="$(grep 'Elapsed time:' "$log" | tail -1 || true)"
+    [ -n "$letzte_zeile" ] && echo "        $letzte_zeile"
+    letzte_zeile="$(grep 'Export fertig' "$log" | tail -1 || true)"
+    [ -n "$letzte_zeile" ] && echo "        $letzte_zeile"
+    letzte_zeile="$(grep 'Ende, Rückgabewert' "$log" | tail -1 || true)"
+    [ -n "$letzte_zeile" ] && echo "        $letzte_zeile"
+  fi
+  echo
+
+  # --- Darf der nächste geplante Lauf? -------------------------------------
+  # Die drei Bedingungen, an denen ein geplanter Lauf still aussteigt. Ohne
+  # diese Anzeige sieht man den Grund erst hinterher im Protokoll – und das
+  # war zweimal der Fall, bevor es diese Option gab.
+  echo "NÄCHSTER geplanter Lauf"
+
+  if [ -f "$STEMPEL" ]; then
+    local frei_ab
+    frei_ab=$(( $(stat -f %m "$STEMPEL") + MINDESTABSTAND_STUNDEN * 3600 ))
+    if [ "$jetzt" -ge "$frei_ab" ]; then
+      echo "        Abstand   frei (letzter Lauf $(date -r "$(stat -f %m "$STEMPEL")" '+%d.%m. %H:%M'))"
+    else
+      echo "        Abstand   gesperrt bis $(date -r "$frei_ab" '+%d.%m. %H:%M') (Mindestabstand ${MINDESTABSTAND_STUNDEN} h)"
+    fi
+  else
+    echo "        Abstand   frei (kein Stempel vorhanden)"
+  fi
+
+  if /usr/bin/pmset -g ps | grep -q "AC Power"; then
+    echo "        Netzteil  angeschlossen"
+  elif [ "$NETZTEIL_NOETIG" = "ja" ]; then
+    echo "        Netzteil  FEHLT – der Lauf würde ausgelassen"
+  else
+    echo "        Netzteil  fehlt, aber NETZTEIL_NOETIG=nein"
+  fi
+
+  if /usr/bin/nc -z -G 3 "$SERVER" 445 >/dev/null 2>&1; then
+    echo "        Server    $SERVER erreichbar"
+  else
+    echo "        Server    $SERVER NICHT erreichbar – der Lauf würde ausgelassen"
+  fi
+
+  echo "        Platz     $(frei_gb) GB frei (Untergrenze $MINDESTFREI_GB GB)"
+  echo
+
+  # --- Der Bestand am Ziel -------------------------------------------------
+  # Gezählt wird auf dem Server per SSH, nicht über den SMB-Mount: Das ist um
+  # Längen schneller und stört einen laufenden Export nicht. Ohne SSH-Zugang
+  # fehlt nur dieser Block, alles andere funktioniert.
+  echo "ZIEL"
+  if [ -f "$EXPORTDB" ]; then
+    echo "        Exportdb  $(/usr/bin/du -h "$EXPORTDB" | cut -f1) (lokal)"
+  fi
+
+  local ssh_user zahlen dateien groesse
+  ssh_user="${SSH_USER:-${SMB_USER:-}}"
+  zahlen=""
+  if [ -n "$ssh_user" ] && [ -n "${BESTAND:-}" ]; then
+    zahlen="$(ssh -o BatchMode=yes -o ConnectTimeout=5 "${ssh_user}@${SERVER}" \
+      "find '$BESTAND' -type f ! -name '*.xmp' ! -path '*/_berichte/*' ! -path '*/_geloescht/*' | wc -l; du -sh '$BESTAND' | cut -f1" 2>/dev/null || true)"
+  fi
+
+  if [ -n "$zahlen" ]; then
+    dateien="$(echo "$zahlen" | sed -n 1p | tr -d ' ')"
+    groesse="$(echo "$zahlen" | sed -n 2p)"
+    echo "        Bestand   $dateien Dateien, $groesse auf $SERVER"
+  else
+    echo "        Bestand   nicht ermittelbar (kein SSH-Zugang zu $SERVER)"
+  fi
+}
+
+if [ "$STATUS" -eq 1 ]; then
+  if [ "$WATCH" -eq 1 ]; then
+    # Ctrl-C beendet die Anzeige, nicht den Export – status_zeigen fasst
+    # nichts an.
+    while true; do clear; status_zeigen; echo; echo "(alle 60 s, Ctrl-C beendet die Anzeige)"; sleep 60; done
+  fi
+  status_zeigen
+  exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # Aufräumen – läuft bei jedem Ende, auch bei Fehler oder Ctrl-C

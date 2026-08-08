@@ -313,7 +313,7 @@ funktioniert. Das ist die wichtigste Zeile des ganzen Testlaufs.
 Fortschritt in einem zweiten Fenster:
 
 ```bash
-./mac/fotostatus.sh -w
+./mac/fotoexport.sh --status -w
 ```
 
 ---

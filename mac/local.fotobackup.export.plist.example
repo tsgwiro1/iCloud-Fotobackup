@@ -65,11 +65,26 @@
     </dict>
 
     <!-- Der Export soll den Rechner nicht ausbremsen, wenn nebenher
-         gearbeitet wird. Das eigentliche Nadelöhr ist ohnehin Apple. -->
+         gearbeitet wird. Nice 5 reicht dafür; die schärfere Bremse steht
+         unten – und die ist bewusst nicht gesetzt. -->
     <key>Nice</key>
     <integer>5</integer>
 
+    <!-- Standard, NICHT Background.
+
+         Background klingt nach der richtigen Wahl für einen nächtlichen
+         Wartungslauf, ist hier aber falsch: launchd drosselt damit die I/O
+         aktiv, und dieser Lauf besteht praktisch nur aus I/O – er fragt
+         jede Dateisignatur einzeln über SMB ab.
+
+         Gemessen an ~50'000 Dateien, gleiche Arbeit, gleiches Ergebnis:
+
+             Background   64–73 min      751 Objekte/min
+             Standard        20 min     2626 Objekte/min
+
+         Faktor 3.5. Nice 5 bleibt als sanfte Bremse; sie wirkt auf die CPU,
+         die hier ohnehin nicht das Nadelöhr ist. -->
     <key>ProcessType</key>
-    <string>Background</string>
+    <string>Standard</string>
 </dict>
 </plist>

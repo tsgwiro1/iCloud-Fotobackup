@@ -80,8 +80,14 @@ Fertigmarkierung. Sie können den Löschabgleich also nicht durcheinanderbringen
 In einem zweiten Fenster:
 
 ```bash
-./mac/fotostatus.sh -w
+./mac/fotoexport.sh --status      # einmalige Auskunft
+./mac/fotoexport.sh --status -w   # aktualisiert sich alle 60 Sekunden
 ```
+
+Zeigt, bei welchem Objekt von wie vielen der Lauf steht, wie schnell er
+vorankommt und wie lange es noch etwa dauert – dazu den letzten
+abgeschlossenen Export und die Bedingungen für den nächsten geplanten Lauf.
+Fasst nichts an und stört den Export nicht.
 
 Oder direkt ins Protokoll:
 
