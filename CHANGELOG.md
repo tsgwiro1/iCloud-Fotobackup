@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Changelog-Einträge 1.0.0 und 1.0.1 zu einem Eintrag zusammengefasst. Beide
+  Stände entstanden vor dem ersten Commit; für 1.0.0 gibt es keinen eigenen
+  Stand im Repository, ein Tag darauf wäre nicht setzbar gewesen.
+
+  Dabei sind sieben Einträge aus „Changed" nach „Added" gewandert, die neue
+  Dateien oder Optionen beschrieben – `pruefe_umgebung.sh`, `docs/betrieb.md`,
+  die LaunchAgent-Vorlage, `--geplant`. Sie standen unter „Changed", weil sie
+  im Verlauf desselben Tages entstanden; als Änderung an einem Vorgänger
+  lesen sie sich falsch.
+
+### Fixed
+- Versions-Tags `v1.0.1` und `v1.1.0` nachgetragen. Der Changelog verwies seit
+  der ersten Fassung auf `releases/tag/…`, gesetzt war nie einer – alle drei
+  Links zeigten ins Leere.
+- Linkliste: Verweis auf `v1.0.0` entfernt, `[Unreleased]` ergänzt.
+
 ## [1.1.0] - 2026-08-08
 
 ### Added
@@ -90,9 +107,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   jedem Neubau des Bundles deshalb **einmal von Hand starten**
   (`open ~/Applications/Fotobackup.app`), danach übernimmt die Automatik.
 
-## [1.0.1] - 2026-08-04
+## [1.0.1] - 2026-08-05
+
+Erste Fassung, entstanden am 3. und 4. August. Im Einsatz mit rund 48'800
+Objekten und 167 GB.
+
+Die Zwischenstände 1.0.0 und 1.0.1 lagen beide vor dem ersten Commit und sind
+hier zu einem Eintrag zusammengefasst.
 
 ### Added
+- `mac/fotoexport.sh` – Export der Fotomediathek über osxphotos auf eine
+  SMB-Freigabe. Baut die Verbindung selbst auf und trennt sie am Ende wieder,
+  auch bei Abbruch oder Fehler (`trap … EXIT INT TERM`).
+- Platzwächter im Export: prüft vor dem Start und danach jede Minute den freien
+  Platz auf der lokalen Platte und beendet den Lauf sauber, bevor sie volläuft.
+- Fertigmarkierung `<bericht>.csv.fertig` nach vollständigem Export – Grundlage
+  dafür, dass der Löschabgleich einem Bericht überhaupt trauen darf.
+- `mac/fotostatus.sh` – Fortschritt eines laufenden Exports, zählt per SSH
+  direkt auf dem Server statt über SMB.
+- `mac/platztest.sh` – misst, ab wann macOS den als „löschbar" geführten
+  Speicher der Fotomediathek tatsächlich freigibt.
+- `pi/pruefe_bestand.py` – monatliche BLAKE3-Prüfung des Bestands gegen
+  Bitfäule. Unterscheidet über Größe und Änderungszeit zwischen legitimem
+  Neuexport und stillem Datenverfall.
+- `pi/quarantaene.py` – Löschabgleich gegen den Exportbericht. Verschiebt
+  Verwaistes nach `_geloescht/JJJJ-MM/` statt es zu löschen.
+- Drei Sperren im Löschabgleich: Fertigmarkierung, Altersgrenze des Berichts
+  (14 Tage), Plausibilitätsgrenze (2 % des Bestands).
+- `pi/melde_geraet.sh` – MQTT-Discovery für Home Assistant. Eine einzige
+  Nachricht legt ein Gerät mit elf Entitäten an (device-based discovery).
+- `pi/konfig.py` – gemeinsamer Konfigurationsleser für Bash und Python.
+- `config.example` – alle rechnerspezifischen Werte an einem Ort.
+- Dokumentation: Installationsanleitung mit Kontrollen je Schritt,
+  Entscheidungsdokument mit Messwerten, Home-Assistant-Anleitung mit fertigen
+  Automationen.
 - `mac/baue_bundle.sh` – erzeugt eine App-Hülle für den geplanten Export.
 
   Nötig, weil macOS Zugriffsrechte pro Programm vergibt und ein Skript unter
@@ -126,37 +174,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Berechtigung nicht von selbst verschwindet, wenn das Programm gelöscht wird –
   gerade bei einer Freigabe von `/bin/bash` bleibt sonst dauerhaft mehr offen
   als nötig.
-
-### Changed
-- Die beiden Überfälligkeits-Automationen zu einer zusammengelegt. Sie
-  beantworteten dieselbe Frage in zwei Bauarten; die Fristen lagen zudem an
-  zwei Orten – eine davon als Sekundenzahl in einem Jinja-Template mitten in
-  einer HA-Automation. Jetzt stehen alle drei Fristen in `config` auf dem
-  Server, der Wächter bewertet sie, und HA reagiert nur noch auf einen
-  Statuswechsel. Damit entfällt auch das letzte Template in Logikposition.
-
-  Es bleiben zwei Automationen, getrennt nach Art des Problems: **Schaden**
-  (Bitfäule gefunden) und **Stillstand** (etwas läuft nicht mehr).
-- Fehlerdiagnose in `pruefe_umgebung.sh`: Statt zu prüfen, ob *es selbst*
-  schreiben kann, liest es `launchctl` und die Protokolle aus und beantwortet,
-  **was beim letzten geplanten Lauf passiert ist**. Bekannte Fehlerbilder
-  werden benannt statt weitergereicht – etwa `Operation not permitted` als
-  fehlende Netzwerkvolume-Berechtigung nach einer macOS-Aktualisierung.
-
-  Damit ist die Arbeitsteilung klar: Der Server meldet **dass** etwas klemmt,
-  das Prüfskript sagt **was**. Eine Push-Nachricht ist der falsche Ort für
-  Fehlersuche.
-- `--geplant` in `mac/fotoexport.sh` – für den Betrieb unter `launchd`. Läuft
-  nur am Netzteil und im erreichbaren Heimnetz; sonst wird der Lauf still
-  ausgelassen, mit **Rückgabewert 0** statt Fehler. Ein Export im Akkubetrieb
-  kostet Ladung und hält den Rechner wach; ausser Haus ist der Server ohnehin
-  nicht erreichbar. Beides ist kein Defekt und soll keinen Alarm auslösen.
-  Manuelle Aufrufe kennen diese Sperren nicht.
-- Alterprüfung des letzten vollständigen Exports in `pruefe_umgebung.sh`.
-  Gegenstück zu den ausgelassenen Läufen: Wer den Laptop nie am Netzteil
-  aufklappt, bei dem läuft der Export nie – und niemand sagt es ihm. Gemessen
-  wird am jüngsten Bericht mit Fertigmarkierung, also am Ergebnis statt an der
-  Absicht.
 - `mac/pruefe_umgebung.sh` – Diagnose beider Seiten: Werkzeuge, Erreichbarkeit,
   Schlüsselbund, Platz, Serverzustand, Berichte, Zeitpläne. Nennt zu jedem
   fehlenden Punkt den nötigen Befehl und den passenden Schritt der Anleitung.
@@ -171,6 +188,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (belegter Mountpoint, Bericht ohne Markierung, offenes Protokoll) korrekt
   ein, statt sie zu bemängeln. Ebenso wird knapper Plattenplatz nur bemängelt,
   solange der Erstlauf noch aussteht – danach brauchen Folgeläufe kaum Platz.
+- Fehlerdiagnose in `pruefe_umgebung.sh`: Statt zu prüfen, ob *es selbst*
+  schreiben kann, liest es `launchctl` und die Protokolle aus und beantwortet,
+  **was beim letzten geplanten Lauf passiert ist**. Bekannte Fehlerbilder
+  werden benannt statt weitergereicht – etwa `Operation not permitted` als
+  fehlende Netzwerkvolume-Berechtigung nach einer macOS-Aktualisierung.
+
+  Damit ist die Arbeitsteilung klar: Der Server meldet **dass** etwas klemmt,
+  das Prüfskript sagt **was**. Eine Push-Nachricht ist der falsche Ort für
+  Fehlersuche.
+- Alterprüfung des letzten vollständigen Exports in `pruefe_umgebung.sh`.
+  Gegenstück zu den ausgelassenen Läufen: Wer den Laptop nie am Netzteil
+  aufklappt, bei dem läuft der Export nie – und niemand sagt es ihm. Gemessen
+  wird am jüngsten Bericht mit Fertigmarkierung, also am Ergebnis statt an der
+  Absicht.
+- `--geplant` in `mac/fotoexport.sh` – für den Betrieb unter `launchd`. Läuft
+  nur am Netzteil und im erreichbaren Heimnetz; sonst wird der Lauf still
+  ausgelassen, mit **Rückgabewert 0** statt Fehler. Ein Export im Akkubetrieb
+  kostet Ladung und hält den Rechner wach; ausser Haus ist der Server ohnehin
+  nicht erreichbar. Beides ist kein Defekt und soll keinen Alarm auslösen.
+  Manuelle Aufrufe kennen diese Sperren nicht.
 - `docs/betrieb.md` – Betriebsanleitung: manuelle Ausführung, Einrichtung des
   wöchentlichen Laufs per `launchd`, Start/Stopp/Kontrolle, Verhalten nach
   Ruhezustand, regelmässige Handgriffe.
@@ -180,6 +217,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Abschnitt zur Berechtigungshürde unter `launchd`: Der Zugriff auf die
   Fotos-Mediathek gilt pro aufrufendem Programm, `/bin/bash` unter launchd
   braucht eine eigene Freigabe.
+- Hinweis in der Installationsanleitung: Die Fotos-Berechtigung gilt pro
+  aufrufender Anwendung. Wer osxphotos aus einer anderen Umgebung startet als
+  der, die er freigegeben hat, bekommt `could not get authorization to access
+  Photos library`.
+
+### Changed
+- Die beiden Überfälligkeits-Automationen zu einer zusammengelegt. Sie
+  beantworteten dieselbe Frage in zwei Bauarten; die Fristen lagen zudem an
+  zwei Orten – eine davon als Sekundenzahl in einem Jinja-Template mitten in
+  einer HA-Automation. Jetzt stehen alle drei Fristen in `config` auf dem
+  Server, der Wächter bewertet sie, und HA reagiert nur noch auf einen
+  Statuswechsel. Damit entfällt auch das letzte Template in Logikposition.
+
+  Es bleiben zwei Automationen, getrennt nach Art des Problems: **Schaden**
+  (Bitfäule gefunden) und **Stillstand** (etwas läuft nicht mehr).
 
 ### Fixed
 - Probeläufe (`--album`, `--dry-run`) schreiben ihren Bericht jetzt als
@@ -190,43 +242,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `quarantaene.py` sucht den jüngsten Bericht **mit** Fertigmarkierung, statt
   am jüngsten Bericht überhaupt zu scheitern. Ein Testlauf blockiert den
   Löschabgleich damit nicht mehr bis zum nächsten Vollexport.
-
-### Added
-- Hinweis in der Installationsanleitung: Die Fotos-Berechtigung gilt pro
-  aufrufender Anwendung. Wer osxphotos aus einer anderen Umgebung startet als
-  der, die er freigegeben hat, bekommt `could not get authorization to access
-  Photos library`.
-
-## [1.0.0] - 2026-08-03
-
-Erste Fassung. Im Einsatz mit rund 48'800 Objekten und 167 GB.
-
-### Added
-- `mac/fotoexport.sh` – Export der Fotomediathek über osxphotos auf eine
-  SMB-Freigabe. Baut die Verbindung selbst auf und trennt sie am Ende wieder,
-  auch bei Abbruch oder Fehler (`trap … EXIT INT TERM`).
-- Platzwächter im Export: prüft vor dem Start und danach jede Minute den freien
-  Platz auf der lokalen Platte und beendet den Lauf sauber, bevor sie volläuft.
-- Fertigmarkierung `<bericht>.csv.fertig` nach vollständigem Export – Grundlage
-  dafür, dass der Löschabgleich einem Bericht überhaupt trauen darf.
-- `mac/fotostatus.sh` – Fortschritt eines laufenden Exports, zählt per SSH
-  direkt auf dem Server statt über SMB.
-- `mac/platztest.sh` – misst, ab wann macOS den als „löschbar" geführten
-  Speicher der Fotomediathek tatsächlich freigibt.
-- `pi/pruefe_bestand.py` – monatliche BLAKE3-Prüfung des Bestands gegen
-  Bitfäule. Unterscheidet über Größe und Änderungszeit zwischen legitimem
-  Neuexport und stillem Datenverfall.
-- `pi/quarantaene.py` – Löschabgleich gegen den Exportbericht. Verschiebt
-  Verwaistes nach `_geloescht/JJJJ-MM/` statt es zu löschen.
-- Drei Sperren im Löschabgleich: Fertigmarkierung, Altersgrenze des Berichts
-  (14 Tage), Plausibilitätsgrenze (2 % des Bestands).
-- `pi/melde_geraet.sh` – MQTT-Discovery für Home Assistant. Eine einzige
-  Nachricht legt ein Gerät mit elf Entitäten an (device-based discovery).
-- `pi/konfig.py` – gemeinsamer Konfigurationsleser für Bash und Python.
-- `config.example` – alle rechnerspezifischen Werte an einem Ort.
-- Dokumentation: Installationsanleitung mit Kontrollen je Schritt,
-  Entscheidungsdokument mit Messwerten, Home-Assistant-Anleitung mit fertigen
-  Automationen.
 
 ### Notes
 Erkenntnisse aus der Inbetriebnahme, die in die Voreinstellungen eingeflossen
@@ -245,6 +260,6 @@ sind:
 - Samba braucht `force create mode`, nicht nur `create mask`: Eine Maske
   erlaubt Bits, sie erzwingt sie nicht.
 
+[Unreleased]: https://github.com/tsgwiro1/iCloud-Fotobackup/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.1.0
 [1.0.1]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.0.1
-[1.0.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.0.0

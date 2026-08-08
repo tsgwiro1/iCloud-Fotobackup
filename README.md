@@ -190,6 +190,7 @@ mit elf Entitäten an. Details und fertige Automationen:
 | [docs/betrieb.md](docs/betrieb.md) | Alltag: manuell, per launchd, Start/Stopp, Berechtigungen |
 | [docs/entscheidungen.md](docs/entscheidungen.md) | Warum es so gebaut ist – Messwerte, Fallstricke, Irrtümer |
 | [docs/home-assistant.md](docs/home-assistant.md) | MQTT, Entitäten, Automationen |
+| [CHANGELOG.md](CHANGELOG.md) | Was sich je Version geändert hat, und warum |
 
 ## 📊 Gemessene Werte
 
