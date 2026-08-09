@@ -371,7 +371,7 @@ if launchctl print "gui/$(id -u)/$LABEL" > /dev/null 2>&1; then
     elif [ "$CODE" = "0" ]; then
       # Ausgelassene Läufe (Akku, fremdes Netz) sind ebenfalls Rückgabewert 0
       if echo "$GEPLANT_BLOCK" | grep -q "verschoben\|ausgelassen"; then
-        ok "letzter geplanter Lauf ($WANN) verschoben – $(echo "$GEPLANT_BLOCK" | grep -oE "Kein Netzteil|nicht erreichbar" | head -1)"
+        ok "letzter geplanter Lauf ($WANN) verschoben – $(echo "$GEPLANT_BLOCK" | grep -oE "Kein Netzteil|nicht erreichbar|Mindestabstand noch nicht erreicht" | head -1)"
       else
         ok "letzter geplanter Lauf ($WANN) ohne Fehler"
       fi

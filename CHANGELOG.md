@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-09
+
+### Fixed
+- Ein geplanter Lauf, der wegen des Mindestabstands ausgelassen wird, schliesst
+  jetzt regulär ab, statt nach der Kopfzeile stumm auszusteigen.
+
+  Vorher blieben Paare aus `=== Fotoexport … (geplant) ===` und
+  `Konfiguration: …` ohne `Ende, Rückgabewert` im Protokoll stehen. Darauf
+  meldete `pruefe_umgebung.sh` „letzter geplanter Lauf ohne Abschluss im
+  Protokoll" – und weil auf einen Volllauf rund 40 Leerläufe folgen, stand
+  diese Warnung fast immer.
+
+  Der Abstand war der einzige der drei Abbruchgründe, der den EXIT-Trap
+  abschaltete und selbst heraussprang; Netzteil und Server melden „verschoben"
+  und lassen den Trap abschliessen. Der Zweig verhält sich jetzt wie seine
+  Nachbarn und ist dabei kürzer geworden.
+
+  ```
+  15:11:19  Mindestabstand noch nicht erreicht (frei ab 10.08. 10:41) – Lauf ausgelassen.
+  15:11:19  Ende, Rückgabewert 0.
+  ```
+- `pruefe_umgebung.sh` erkannte beim Grund für einen verschobenen Lauf nur
+  „Kein Netzteil" und „nicht erreichbar" – der Mindestabstand fehlte und die
+  Meldung endete mit einem Gedankenstrich ins Leere.
+- Kommentar in `local.fotobackup.export.plist.example` berichtigt: Leerläufe
+  enden nicht „ohne Logeintrag", sondern mit drei Zeilen.
+
 ## [1.2.0] - 2026-08-09
 
 ### Added
@@ -304,7 +331,8 @@ sind:
 - Samba braucht `force create mode`, nicht nur `create mask`: Eine Maske
   erlaubt Bits, sie erzwingt sie nicht.
 
-[Unreleased]: https://github.com/tsgwiro1/iCloud-Fotobackup/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/tsgwiro1/iCloud-Fotobackup/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.2.1
 [1.2.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.2.0
 [1.1.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.1.0
 [1.0.1]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.0.1

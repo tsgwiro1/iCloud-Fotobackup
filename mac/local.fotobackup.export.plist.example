@@ -41,7 +41,8 @@
          Das Skript entscheidet selbst, ob wirklich etwas zu tun ist: Es
          läuft nur, wenn seit dem letzten erfolgreichen Lauf mindestens
          MINDESTABSTAND_STUNDEN (Standard 20) vergangen sind. Die übrigen
-         Aufrufe enden nach Sekundenbruchteilen ohne Logeintrag.
+         Aufrufe enden nach Sekundenbruchteilen mit drei Zeilen im Protokoll:
+         Kopfzeile, Grund, Rückgabewert 0.
 
          Effektiv heisst das: Der Export startet, sobald der Mac am Strom
          hängt und im Heimnetz ist – höchstens aber einmal pro Tag. -->

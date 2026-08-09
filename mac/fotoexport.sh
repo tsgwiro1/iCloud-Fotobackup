@@ -395,9 +395,17 @@ if [ "$GEPLANT" -eq 1 ]; then
   if [ -f "$STEMPEL" ]; then
     ALTER_STD=$(( ( $(date +%s) - $(stat -f %m "$STEMPEL") ) / 3600 ))
     if [ "$ALTER_STD" -lt "$MINDESTABSTAND_STUNDEN" ]; then
-      # Kein Logeintrag: Diese Prüfung läuft oft und würde das Protokoll
-      # sonst zumüllen.
-      trap - EXIT; rm -f "$LOCKDATEI"; exit 0
+      # Wie Netzteil und Server: melden und den EXIT-Trap abschliessen lassen.
+      #
+      # Früher stieg dieser Fall stumm aus, um das Protokoll nicht zu füllen –
+      # die Kopfzeile war da aber schon geschrieben. Zurück blieben Paare aus
+      # Kopfzeile und "Konfiguration:" ohne Abschluss, und pruefe_umgebung.sh
+      # meldete darauf "letzter geplanter Lauf ohne Abschluss im Protokoll".
+      # Weil auf einen Volllauf rund 40 solche Leerläufe folgen, stand diese
+      # Warnung fast immer – und eine Warnung, die immer steht, wird nicht
+      # mehr gelesen. Drei Zeilen pro Leerlauf sind der günstigere Preis.
+      melde "Mindestabstand noch nicht erreicht (frei ab $(date -r "$(( $(stat -f %m "$STEMPEL") + MINDESTABSTAND_STUNDEN * 3600 ))" '+%d.%m. %H:%M')) – Lauf ausgelassen."
+      exit 0
     fi
   fi
 
