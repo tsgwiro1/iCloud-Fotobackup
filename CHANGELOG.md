@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-09
+
+### Added
+- `fotoexport.sh --status`: Zeile **Aufruf** im Block „NÄCHSTER geplanter Lauf" –
+  wann launchd das nächste Mal nachfragt, wann er es zuletzt tat, und in welchem
+  Abstand.
+
+  Anlass war eine Fehldiagnose am 9. August 2026: Der Status meldete „Abstand
+  frei" und alle Bedingungen grün, trotzdem lief nichts. Der geplante Aufruf um
+  12:00:55 kam 33 Sekunden vor Ablauf der 20-Stunden-Sperre (12:01:28); der
+  nächste stand erst um 12:31 an. Ohne diese Zeile liest sich „alles grün" als
+  „startet gleich", obwohl bis zu 30 Minuten dazwischenliegen können.
+
+  Das Intervall kommt aus `launchctl print`, nicht aus einer Konstante – wer
+  `StartInterval` im Plist ändert, muss die Anzeige nicht nachziehen. Ist der
+  Auftrag nicht geladen, sagt die Zeile das, statt einen Zeitpunkt zu erfinden.
+  Der letzte Aufruf wird aus den `(geplant)`-Kopfzeilen im Tagesprotokoll
+  gelesen; launchd gibt ihn nicht heraus.
+
+  „ca." ist wörtlich gemeint: `StartInterval` zählt nur wache Zeit, nach einem
+  Ruhezustand holt launchd den verpassten Aufruf beim Aufwachen nach. Der
+  angezeigte Zeitpunkt ist eine Obergrenze, kein Termin.
+
 ### Changed
+- `fotoexport.sh --status`: Der Block „NÄCHSTER geplanter Lauf" rechnet während
+  eines aktiven Laufs voraus statt zurück.
+
+  Vorher kündigte er mitten im Export einen Lauf „ca. 13:00" an und meldete
+  „Abstand frei" – beides irreführend. Der Aufruf um 13:00 findet zwar statt,
+  trifft aber auf die Sperrdatei und bricht sofort ab; und der Stempel für den
+  Mindestabstand wird erst am Ende des laufenden Exports gesetzt.
+
+  Jetzt: „Aufruf … – steigt an der Sperrdatei aus" und „Abstand frei ab ca.
+  10.08. 08:50 (20 h nach Ende des laufenden Laufs)". Die Schätzung stammt aus
+  der Restzeit der Fortschrittsanzeige; solange die fehlt (Vorbereitungsphase),
+  wird keine Uhrzeit erfunden.
+
 - Changelog-Einträge 1.0.0 und 1.0.1 zu einem Eintrag zusammengefasst. Beide
   Stände entstanden vor dem ersten Commit; für 1.0.0 gibt es keinen eigenen
   Stand im Repository, ein Tag darauf wäre nicht setzbar gewesen.
@@ -19,6 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lesen sie sich falsch.
 
 ### Fixed
+- `fotoexport.sh --status`: Die Aufruf-Zeile rechnete ab dem *Start* des letzten
+  Laufs und lag damit nach jedem langen Lauf um dessen Laufzeit daneben.
+
+  `StartInterval` misst ab Prozess*ende*: Auf den Lauf vom 9. August 2026
+  (12:30:56–12:51:41) folgte der nächste Aufruf nicht um 13:00:56, sondern um
+  13:21:58. Bezugspunkt ist jetzt die Zeile `Ende, Rückgabewert` unterhalb der
+  letzten `(geplant)`-Kopfzeile, bei einem laufenden Export dessen geschätztes
+  Ende.
 - Versions-Tags `v1.0.1` und `v1.1.0` nachgetragen. Der Changelog verwies seit
   der ersten Fassung auf `releases/tag/…`, gesetzt war nie einer – alle drei
   Links zeigten ins Leere.
@@ -260,6 +304,7 @@ sind:
 - Samba braucht `force create mode`, nicht nur `create mask`: Eine Maske
   erlaubt Bits, sie erzwingt sie nicht.
 
-[Unreleased]: https://github.com/tsgwiro1/iCloud-Fotobackup/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/tsgwiro1/iCloud-Fotobackup/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.2.0
 [1.1.0]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.1.0
 [1.0.1]: https://github.com/tsgwiro1/iCloud-Fotobackup/releases/tag/v1.0.1

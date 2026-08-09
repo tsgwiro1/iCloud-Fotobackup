@@ -108,8 +108,12 @@ frei_gb() { /bin/df -g / | awk 'NR==2 {print $4}'; }
 # läuft gerade etwas, wie ist der letzte ausgegangen, und darf der nächste.
 status_zeigen() {
   local jetzt lauf_pid start dauer letztes_log fortschritt n gesamt
-  local rest tempo rest_min log letzte_zeile
+  local rest tempo rest_min log letzte_zeile lauf_ende
   jetzt=$(date +%s)
+  # Geschätztes Ende eines gerade laufenden Exports. Wird weiter unten
+  # gebraucht: Solange einer läuft, hängt der nächste geplante Lauf an dessen
+  # Ende, nicht am alten Stempel.
+  lauf_ende=""
 
   echo "Fotoexport – Status vom $(date '+%d.%m.%Y, %H:%M:%S')"
   echo
@@ -143,6 +147,7 @@ status_zeigen() {
         rest=$(( gesamt - n ))
         [ "$tempo" -gt 0 ] && rest_min=$(( rest / tempo )) || rest_min=0
         echo "        $tempo Objekte/min, noch etwa $rest_min min"
+        lauf_ende=$(( jetzt + rest_min * 60 ))
       fi
     else
       echo "        noch in der Vorbereitung (Mediathek wird gelesen)"
@@ -179,8 +184,90 @@ status_zeigen() {
   # war zweimal der Fall, bevor es diese Option gab.
   echo "NÄCHSTER geplanter Lauf"
 
-  if [ -f "$STEMPEL" ]; then
-    local frei_ab
+  # Wann fragt launchd überhaupt wieder nach?
+  #
+  # Ohne diese Zeile liest man "Abstand frei, alles grün" und erwartet, dass
+  # es losgeht – dabei können bis zum nächsten Aufruf noch bis zu 30 Minuten
+  # vergehen. Genau das führte am 9. August 2026 zur Vermutung, die Automatik
+  # sei tot: Der Aufruf um 12:00:55 kam 33 Sekunden vor Ablauf der Sperre
+  # (12:01:28), der nächste stand erst um 12:31 an.
+  #
+  # "ca." ist wörtlich gemeint. StartInterval zählt nur wache Zeit; nach einem
+  # Ruhezustand holt launchd den verpassten Aufruf beim Aufwachen nach. Der
+  # angezeigte Zeitpunkt ist die Obergrenze, kein Termin.
+  local dienst intervall kandidat zeile tag uhr letzter_aufruf naechster_aufruf
+  dienst="local.fotobackup.export"
+  intervall="$(launchctl print "gui/$(id -u)/$dienst" 2>/dev/null \
+    | sed -n 's/.*run interval = \([0-9][0-9]*\) seconds.*/\1/p' | head -1)"
+
+  if [ -z "$intervall" ]; then
+    echo "        Aufruf    $dienst ist nicht geladen – es läuft nichts automatisch"
+  else
+    # Jeder geplante Aufruf schreibt seine Kopfzeile ins Tagesprotokoll, auch
+    # der, der unmittelbar danach still aussteigt. Damit ist das Protokoll die
+    # verlässlichste Quelle für den letzten Aufruf – launchd selbst gibt den
+    # Zeitpunkt nicht heraus.
+    # Referenzpunkt ist das ENDE des letzten Laufs, nicht sein Start: launchd
+    # startet die Uhr für StartInterval erst, wenn der Prozess beendet ist.
+    #
+    # Belegt am 9. August 2026: Lauf von 12:30:56 bis 12:51:41, nächster
+    # Aufruf um 13:21:58 – 30 Minuten nach dem Ende. Nach dem Start wäre
+    # 13:00:56 fällig gewesen; um diese Zeit war der Mac wach und es
+    # geschah nichts. Bei den kurzen Leerläufen fällt der Unterschied nicht
+    # auf, weil sie in Sekundenbruchteilen enden.
+    local zeilennr endzeile
+    letzter_aufruf=""
+    for kandidat in $(ls -t "$LOGVERZEICHNIS"/export_*.log 2>/dev/null || true); do
+      zeilennr="$(grep -n '(geplant) ===' "$kandidat" 2>/dev/null | tail -1 | cut -d: -f1 || true)"
+      if [ -n "$zeilennr" ]; then
+        tag="$(basename "$kandidat" .log | sed 's/^export_//')"
+        zeile="$(sed -n "${zeilennr}p" "$kandidat")"
+        uhr="${zeile%% *}"
+        # Endete dieser Lauf schon, zählt sein Ende. Gesucht wird nur
+        # unterhalb der Kopfzeile, damit nicht das Ende eines früheren
+        # oder von Hand gestarteten Laufs erwischt wird.
+        endzeile="$(tail -n +"$zeilennr" "$kandidat" | grep 'Ende, Rückgabewert' | tail -1 || true)"
+        [ -n "$endzeile" ] && uhr="${endzeile%% *}"
+        letzter_aufruf="$(date -j -f '%Y-%m-%d %H:%M:%S' "$tag $uhr" '+%s' 2>/dev/null || true)"
+        break
+      fi
+    done
+
+    # Läuft gerade einer, ist sein geschätztes Ende der Bezugspunkt.
+    [ -n "$lauf_pid" ] && [ -n "$lauf_ende" ] && letzter_aufruf="$lauf_ende"
+
+    # Läuft gerade einer, findet der nächste Aufruf zwar statt, stösst aber
+    # auf die Sperrdatei und bricht sofort ab – ohne Logeintrag. Ohne diesen
+    # Zusatz liest sich die Zeile als Ankündigung eines zweiten Laufs.
+    local sperrhinweis
+    sperrhinweis=""
+    [ -n "$lauf_pid" ] && sperrhinweis=" – steigt an der Sperrdatei aus"
+
+    if [ -z "$letzter_aufruf" ]; then
+      echo "        Aufruf    alle $(( intervall / 60 )) min (kein früherer im Protokoll)$sperrhinweis"
+    else
+      naechster_aufruf=$(( letzter_aufruf + intervall ))
+      if [ "$naechster_aufruf" -le "$jetzt" ]; then
+        echo "        Aufruf    steht an (gezählt ab $(date -r "$letzter_aufruf" '+%d.%m. %H:%M'), alle $(( intervall / 60 )) min)$sperrhinweis"
+      else
+        echo "        Aufruf    ca. $(date -r "$naechster_aufruf" '+%H:%M') (gezählt ab $(date -r "$letzter_aufruf" '+%H:%M'), alle $(( intervall / 60 )) min)$sperrhinweis"
+      fi
+    fi
+  fi
+
+  # Während eines Laufs wäre der alte Stempel die falsche Bezugsgrösse: Er
+  # wird erst am Ende des laufenden Exports neu gesetzt. „Abstand frei" hiesse
+  # hier also das Gegenteil dessen, was gilt – gerechnet wird deshalb ab dem
+  # geschätzten Ende.
+  local frei_ab
+  if [ -n "$lauf_pid" ]; then
+    if [ -n "$lauf_ende" ]; then
+      frei_ab=$(( lauf_ende + MINDESTABSTAND_STUNDEN * 3600 ))
+      echo "        Abstand   frei ab ca. $(date -r "$frei_ab" '+%d.%m. %H:%M') (${MINDESTABSTAND_STUNDEN} h nach Ende des laufenden Laufs)"
+    else
+      echo "        Abstand   frei ${MINDESTABSTAND_STUNDEN} h nach Ende des laufenden Laufs (Ende noch nicht abschätzbar)"
+    fi
+  elif [ -f "$STEMPEL" ]; then
     frei_ab=$(( $(stat -f %m "$STEMPEL") + MINDESTABSTAND_STUNDEN * 3600 ))
     if [ "$jetzt" -ge "$frei_ab" ]; then
       echo "        Abstand   frei (letzter Lauf $(date -r "$(stat -f %m "$STEMPEL")" '+%d.%m. %H:%M'))"

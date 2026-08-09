@@ -1,6 +1,6 @@
 # iCloud-Fotobackup 📷
 
-![Version](https://img.shields.io/badge/version-v1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v1.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%2B%20Linux-lightgrey.svg)
 
@@ -144,17 +144,42 @@ der wichtigste – ein geplanter Lauf steigt still aus, wenn Mindestabstand,
 Netzteil oder Server nicht mitspielen, und den Grund sah man bisher erst
 hinterher im Protokoll.
 
+Zwischen zwei Läufen:
+
 ```
-LÄUFT   seit 12:46:02 Uhr, 34 min, PID 97188
-        bei Objekt 24931 von 48838 (51 %)
-        733 Objekte/min, noch etwa 32 min
+LÄUFT   nichts.
 
 NÄCHSTER geplanter Lauf
-        Abstand   gesperrt bis 09.08. 12:01 (Mindestabstand 20 h)
+        Aufruf    ca. 12:30 (letzter 12:00, alle 30 min)
+        Abstand   frei (letzter Lauf 08.08. 16:01)
         Netzteil  FEHLT – der Lauf würde ausgelassen
         Server    192.168.0.6 erreichbar
         Platz     51 GB frei (Untergrenze 8 GB)
 ```
+
+Die Zeile **Aufruf** ist der Rahmen für alles darunter: Selbst wenn alle
+Bedingungen grün sind, passiert bis zum nächsten launchd-Aufruf nichts. Zwischen
+„Abstand frei" und dem tatsächlichen Start können deshalb bis zu 30 Minuten
+liegen. „ca." ist wörtlich zu nehmen – `StartInterval` zählt nur wache Zeit, nach
+einem Ruhezustand holt launchd den verpassten Aufruf beim Aufwachen nach.
+
+Während ein Lauf aktiv ist, rechnet der Block voraus statt zurück:
+
+```
+LÄUFT   seit 12:30:56 Uhr, 9 min, PID 14050
+        bei Objekt 21503 von 48842 (44 %)
+        2389 Objekte/min, noch etwa 11 min
+
+NÄCHSTER geplanter Lauf
+        Aufruf    ca. 13:00 (letzter 12:30, alle 30 min) – steigt an der Sperrdatei aus
+        Abstand   frei ab ca. 10.08. 08:50 (20 h nach Ende des laufenden Laufs)
+        ...
+```
+
+Der Aufruf um 13:00 findet statt, trifft aber auf die Sperrdatei und bricht
+sofort ab – es gibt keinen zweiten gleichzeitigen Lauf. Und der Mindestabstand
+zählt ab dem **Ende** des laufenden Exports, nicht ab dem alten Stempel: Der
+wird erst beim Abschluss neu gesetzt.
 
 ### `mac/pruefe_dateien.py`
 
